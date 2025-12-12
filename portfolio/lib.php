@@ -2,8 +2,14 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+use assignsubmission_portfolio\event\portfolio_submitted;
+use assignsubmission_portfolio\attempts_manager;
+use assignsubmission_portfolio\generator;
+
 /**
  * Plugin name.
+ *
+ * @return string
  */
 function assignsubmission_portfolio_pluginname(): string {
     return get_string('pluginname', 'assignsubmission_portfolio');
@@ -17,7 +23,12 @@ function assignsubmission_portfolio_pluginname(): string {
  * @param context $context
  * @return string
  */
-function assignsubmission_portfolio_view($submission, $assign, $context): string {
+function assignsubmission_portfolio_view(
+    $submission,
+    $assign,
+    $context
+): string {
+
     global $PAGE;
 
     /** @var assignsubmission_portfolio_renderer $renderer */
@@ -33,6 +44,8 @@ function assignsubmission_portfolio_view($submission, $assign, $context): string
 /**
  * Save the portfolio submission.
  *
+ * This is called when the student submits or resubmits.
+ *
  * @param stdClass $submission
  * @param stdClass $data
  * @return bool
@@ -42,39 +55,40 @@ function assignsubmission_portfolio_save(
     stdClass $data
 ): bool {
 
-    // Only act on our submission button.
+    // Only act when our submit button is used.
     if (empty($data->portfolio_submit)) {
         return true;
     }
 
+    $userid   = $submission->userid;
+    $assignid = $submission->assignment;
+    $cmid     = $submission->cmid;
+
     // Generate final portfolio PDF.
-    $pdfcontent = assignsubmission_portfolio_generate_final_pdf(
-        $submission->userid,
-        $submission->assignment
+    $pdfcontent = generator::generate_final_pdf(
+        $userid,
+        $assignid
     );
 
-    // Store PDF using Moodle File API.
-    $fs = get_file_storage();
-    $context = context_module::instance($submission->cmid);
-
-    // Remove files only for this attempt (older attempts remain).
-    $fs->delete_area_files(
-        $context->id,
-        'assignsubmission_portfolio',
-        'submission_files',
-        $submission->id
+    // Store PDF for this attempt.
+    attempts_manager::store_submission_file(
+        $userid,
+        $assignid,
+        $submission->id,
+        $pdfcontent,
+        $cmid
     );
 
-    $fileinfo = [
-        'contextid' => $context->id,
-        'component' => 'assignsubmission_portfolio',
-        'filearea'  => 'submission_files',
-        'itemid'    => $submission->id,
-        'filepath'  => '/',
-        'filename'  => 'Portfolio.pdf',
-    ];
+    // Trigger portfolio submitted event.
+    $context = context_module::instance($cmid);
 
-    $fs->create_file_from_string($fileinfo, $pdfcontent);
+    $event = portfolio_submitted::create([
+        'objectid' => $submission->id,
+        'context'  => $context,
+        'userid'   => $userid,
+    ]);
+
+    $event->trigger();
 
     return true;
 }
