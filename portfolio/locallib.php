@@ -64,7 +64,7 @@ class assignsubmission_portfolio_helper {
             );
 
             foreach ($files as $file) {
-                if ($file->get_userid() != $userid) {
+                if ((int)$file->get_userid() !== $userid) {
                     continue;
                 }
 
@@ -166,64 +166,101 @@ class assignsubmission_portfolio_helper {
     }
 }
 
+/* =========================================================================
+ * DOCX ASSEMBLY (Phase K3)
+ * ========================================================================= */
+
 /**
- * Generate preview PDF (still dummy content).
- * Real DOCX merging comes next.
+ * Assemble the portfolio DOCX from module documents.
+ *
+ * @param int $userid
+ * @param int $assignid
+ * @return string Path to assembled DOCX file
+ */
+function assignsubmission_portfolio_assemble_docx(
+    int $userid,
+    int $assignid
+): string {
+
+    global $CFG, $DB;
+
+    // Temporary working directory.
+    $tempdir = make_temp_directory('portfolio_' . $userid . '_' . $assignid);
+    $outfile = $tempdir . '/portfolio.docx';
+
+    // Load assignment + user.
+    $assign = $DB->get_record('assign', ['id' => $assignid], '*', MUST_EXIST);
+    $user   = $DB->get_record('user', ['id' => $userid], '*', MUST_EXIST);
+
+    // NOTE:
+    // PhpWord is not yet bundled. This is a safe structural stub.
+    // In Phase K4 we will either:
+    //  - bundle PhpWord, or
+    //  - swap to LibreOffice conversion.
+
+    $content = "Portfolio DOCX (stub)\n\n"
+             . "Student: {$user->firstname} {$user->lastname}\n"
+             . "Assignment: {$assign->name}\n\n";
+
+    $modules = assignsubmission_portfolio_helper::get_module_ids($assignid);
+
+    foreach ($modules as $modulenumber => $cmid) {
+        $docx = assignsubmission_portfolio_helper::get_latest_module_docx(
+            $userid,
+            $cmid
+        );
+
+        if ($docx) {
+            $content .= "Module {$modulenumber}: DOCX found ({$docx->get_filename()})\n";
+        } else {
+            $content .= "Module {$modulenumber}: No document\n";
+        }
+    }
+
+    // Write stub DOCX (plain text for now).
+    file_put_contents($outfile, $content);
+
+    return $outfile;
+}
+
+/* =========================================================================
+ * PREVIEW / SUBMISSION OUTPUT
+ * ========================================================================= */
+
+/**
+ * Generate preview PDF (temporary stub).
  */
 function assignsubmission_portfolio_generate_preview_pdf(
     stdClass $assign,
     int $userid
 ): string {
 
-    global $DB;
-
-    $user = $DB->get_record(
-        'user',
-        ['id' => $userid],
-        'firstname, lastname',
-        MUST_EXIST
+    $docxpath = assignsubmission_portfolio_assemble_docx(
+        $userid,
+        $assign->id
     );
 
-    $text = "Portfolio Preview\n\n"
-          . "Student: {$user->firstname} {$user->lastname}\n"
-          . "Assignment: {$assign->name}\n"
-          . "Generated: " . userdate(time()) . "\n\n"
-          . "This preview reflects the latest module documents.";
-
-    return assignsubmission_portfolio_render_pdf($text);
+    return assignsubmission_portfolio_render_pdf(
+        "Preview generated.\n\nAssembled DOCX:\n{$docxpath}"
+    );
 }
 
 /**
- * Generate final portfolio PDF (still dummy content).
+ * Generate final portfolio PDF (temporary stub).
  */
 function assignsubmission_portfolio_generate_final_pdf(
     int $userid,
     int $assignid
 ): string {
 
-    global $DB;
-
-    $user = $DB->get_record(
-        'user',
-        ['id' => $userid],
-        'firstname, lastname',
-        MUST_EXIST
+    $docxpath = assignsubmission_portfolio_assemble_docx(
+        $userid,
+        $assignid
     );
 
-    $assign = $DB->get_record(
-        'assign',
-        ['id' => $assignid],
-        'name',
-        MUST_EXIST
+    return assignsubmission_portfolio_render_pdf(
+        "Final submission generated.\n\nAssembled DOCX:\n{$docxpath}"
     );
-
-    $text = "Final Portfolio Submission\n\n"
-          . "Student: {$user->firstname} {$user->lastname}\n"
-          . "Assignment: {$assign->name}\n"
-          . "Submitted: " . userdate(time()) . "\n\n"
-          . "All completed modules are included.";
-
-    return assignsubmission_portfolio_render_pdf($text);
 }
 
 /**
