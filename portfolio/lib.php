@@ -66,19 +66,16 @@ function assignsubmission_portfolio_validate($data, $files, &$errors) {
  * @param stdClass $context
  * @return string HTML output
  */
-function assignsubmission_portfolio_view($submission, $context) {
+function assignsubmission_portfolio_view($submission, $assign, $context) {
     global $PAGE;
 
     $userid = $submission->userid;
 
-    // Get the plugin renderer.
     /** @var assignsubmission_portfolio_renderer $renderer */
     $renderer = $PAGE->get_renderer('assignsubmission_portfolio');
 
-    // Render the submission page UI.
     return $renderer->render_submission_page($userid);
 }
-
 
 /**
  * Delete submission data when a student's attempt is deleted.

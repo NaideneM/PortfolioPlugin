@@ -17,7 +17,11 @@ class assignsubmission_portfolio_renderer extends plugin_renderer_base {
      */
     public function render_submission_page($userid) {
         // Prepare data for the submission UI.
-        $data = assignsubmission_portfolio_helper::prepare_submission_page_data($userid);
+        $data = assignsubmission_portfolio_helper::prepare_submission_page_data(
+            $userid,
+            $this->page->cm->instance,
+            $this->page->cm->id
+        );
 
         // Wrap data in a renderable class (templatable).
         $renderable = new \assignsubmission_portfolio\output\submission_page($data);

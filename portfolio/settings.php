@@ -1,6 +1,6 @@
 <?php
 
-defined('MOODDLE_INTERNAL') || die();
+defined('MOODLE_INTERNAL') || die();
 
 if ($ADMIN->fulltree) {
 

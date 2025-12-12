@@ -75,7 +75,11 @@ class assignsubmission_portfolio_helper {
      * @param int $userid
      * @return array
      */
-    public static function prepare_submission_page_data($userid) {
+    public static function prepare_submission_page_data(
+        int $userid,
+        int $assignid,
+        int $cmid
+    ): array {
         $moduleids = self::get_module_ids();
         $completion = self::get_module_completion_status($userid, $moduleids);
         $allcomplete = self::all_modules_complete($completion);
@@ -86,7 +90,11 @@ class assignsubmission_portfolio_helper {
             'allcomplete' => $allcomplete,
             'integritycheckenabled' => $allcomplete,
             'submitenabled' => $allcomplete,
-            'previewurl' => self::get_preview_pdf_url($userid),
+            'previewurl' => self::get_preview_pdf_url(
+                $userid,
+                $data['assignid'],
+                $data['cmid']
+            ),
         ];
     }
 
@@ -94,13 +102,19 @@ class assignsubmission_portfolio_helper {
      * Returns the URL for the preview PDF shown in the iframe.
      *
      * @param int $userid
-     * @return string URL
+     * @param int $assignid
+     * @param int $cmid
+     * @return moodle_url
      */
-    public static function get_preview_pdf_url($userid) {
-        // Will later call /preview.php or pluginfile.php.
-        return new moodle_url('/mod/assign/submission/portfolio/preview.php', [
-            'userid' => $userid,
-        ]);
+    public static function get_preview_pdf_url(int $userid, int $assignid, int $cmid): moodle_url {
+        return new moodle_url(
+            '/mod/assign/submission/portfolio/preview.php',
+            [
+                'userid'   => $userid,
+                'assignid' => $assignid,
+                'cmid'     => $cmid,
+            ]
+        );
     }
 
     /**
