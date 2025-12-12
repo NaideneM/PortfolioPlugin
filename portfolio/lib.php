@@ -3,87 +3,78 @@
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * Returns the name of the plugin shown in the assignment settings.
- *
- * @return string
+ * Plugin name.
  */
-function assignsubmission_portfolio_pluginname() {
+function assignsubmission_portfolio_pluginname(): string {
     return get_string('pluginname', 'assignsubmission_portfolio');
 }
 
 /**
- * Add submission elements to the assignment settings form (admin-level).
+ * Render the student submission page.
  *
- * @param MoodleQuickForm $mform
- * @param stdClass $context
- * @return void
+ * @param stdClass $submission
+ * @param stdClass $assign
+ * @param context $context
+ * @return string
  */
-function assignsubmission_portfolio_make_submission_form(&$mform, $context) {
-    // No form elements required yet.
+function assignsubmission_portfolio_view($submission, $assign, $context): string {
+    global $PAGE;
+
+    /** @var assignsubmission_portfolio_renderer $renderer */
+    $renderer = $PAGE->get_renderer('assignsubmission_portfolio');
+
+    return $renderer->render_submission_page(
+        $submission->userid,
+        $assign->id,
+        $context->instanceid
+    );
 }
 
 /**
- * Saves the submission data (final PDF) – placeholder for now.
+ * Save the portfolio submission.
  *
  * @param stdClass $submission
  * @param stdClass $data
  * @return bool
  */
-function assignsubmission_portfolio_save(stdClass $submission, stdClass $data) {
-    // We will fill this in later when generating the portfolio PDF.
-    return true;
-}
+function assignsubmission_portfolio_save(
+    stdClass $submission,
+    stdClass $data
+): bool {
 
-/**
- * Determines if the plugin is enabled globally.
- *
- * @return bool
- */
-function assignsubmission_portfolio_is_enabled() {
-    return get_config('assignsubmission_portfolio', 'default');
-}
+    // Only act on our submission button.
+    if (empty($data->portfolio_submit)) {
+        return true;
+    }
 
-/**
- * Validates before form submission.
- *
- * @param array $data
- * @param array $files
- * @param stdClass $errors
- */
-function assignsubmission_portfolio_validate($data, $files, &$errors) {
-    // Later we will validate:
-    // - All modules completed
-    // - Integrity checkbox ticked
-    return;
-}
+    // Generate final portfolio PDF.
+    $pdfcontent = assignsubmission_portfolio_generate_final_pdf(
+        $submission->userid,
+        $submission->assignment
+    );
 
-/**
- * View submission from the student's perspective.
- *
- * Called when the student opens the Portfolio Submission assignment.
- *
- * @param stdClass $submission
- * @param stdClass $context
- * @return string HTML output
- */
-function assignsubmission_portfolio_view($submission, $assign, $context) {
-    global $PAGE;
+    // Store PDF using Moodle File API.
+    $fs = get_file_storage();
+    $context = context_module::instance($submission->cmid);
 
-    $userid = $submission->userid;
+    // Remove files only for this attempt (older attempts remain).
+    $fs->delete_area_files(
+        $context->id,
+        'assignsubmission_portfolio',
+        'submission_files',
+        $submission->id
+    );
 
-    /** @var assignsubmission_portfolio_renderer $renderer */
-    $renderer = $PAGE->get_renderer('assignsubmission_portfolio');
+    $fileinfo = [
+        'contextid' => $context->id,
+        'component' => 'assignsubmission_portfolio',
+        'filearea'  => 'submission_files',
+        'itemid'    => $submission->id,
+        'filepath'  => '/',
+        'filename'  => 'Portfolio.pdf',
+    ];
 
-    return $renderer->render_submission_page($userid);
-}
+    $fs->create_file_from_string($fileinfo, $pdfcontent);
 
-/**
- * Delete submission data when a student's attempt is deleted.
- *
- * @param stdClass $submission
- * @return bool
- */
-function assignsubmission_portfolio_delete(stdClass $submission) {
-    // We will later delete PDFs from the file storage.
     return true;
 }
