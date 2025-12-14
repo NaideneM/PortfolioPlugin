@@ -3,15 +3,15 @@
   <h3>{{#str}}previewheading, assignsubmission_portfolio{{/str}}</h3>
 
   {{#previewurl}}
-    <div class="portfolio-preview" style="margin: 0 0 1rem 0;">
+    <div class="portfolio-preview" style="margin-bottom: 1rem;">
       <iframe
         src="{{previewurl}}"
         title="{{#str}}previewheading, assignsubmission_portfolio{{/str}}"
         width="100%"
         height="900"
         style="border: 1px solid #ccc; border-radius: 6px;"
-        loading="lazy"
-      ></iframe>
+        loading="lazy">
+      </iframe>
     </div>
   {{/previewurl}}
 
@@ -21,12 +21,12 @@
     </div>
   {{/previewurl}}
 
-  <h4 style="margin-top: 1rem;">{{#str}}modulestatusheading, assignsubmission_portfolio{{/str}}</h4>
+  <h4>{{#str}}modulestatusheading, assignsubmission_portfolio{{/str}}</h4>
 
-  <ul class="list-unstyled" style="margin-bottom: 1rem;">
+  <ul class="list-unstyled mb-3">
     {{#modules}}
-      <li style="padding: .25rem 0;">
-        <strong>Module {{id}}</strong>:
+      <li>
+        <strong>Module {{number}}</strong>:
         {{#completed}}
           <span class="badge bg-success">Completed</span>
         {{/completed}}
@@ -43,68 +43,31 @@
     </div>
   {{/allcomplete}}
 
-  <hr />
+  <hr>
 
-  <div class="portfolio-integrity" style="margin: 1rem 0;">
+  <div class="portfolio-integrity my-3">
     <h4>{{#str}}integritylabel, assignsubmission_portfolio{{/str}}</h4>
 
-    <label style="display: flex; gap: .5rem; align-items: flex-start;">
+    <label class="d-flex gap-2 align-items-start">
       <input
         type="checkbox"
+        name="integrity_check"
         id="portfolio-integrity-check"
-        {{^integritycheckenabled}}disabled{{/integritycheckenabled}}
-      />
+        {{^integritycheckenabled}}disabled{{/integritycheckenabled}}>
       <span>{{#str}}integritycheck, assignsubmission_portfolio{{/str}}</span>
     </label>
   </div>
 
-  <div class="portfolio-actions" style="margin-top: 1rem;">
+  <div class="portfolio-actions mt-3">
     <button
-      type="button"
-      id="portfolio-submit-btn"
+      type="submit"
+      name="portfolio_submit"
+      value="1"
       class="btn btn-primary"
-      {{^submitenabled}}disabled{{/submitenabled}}
-      data-submittype="{{submittype}}"
-    >
-      {{#issubmit}}
-        {{#str}}submitportfolio, assignsubmission_portfolio{{/str}}
-      {{/issubmit}}
-      {{#isresubmit}}
-        {{#str}}resubmitportfolio, assignsubmission_portfolio{{/str}}
-      {{/isresubmit}}
+      {{^submitenabled}}disabled{{/submitenabled}}>
+      {{#issubmit}}{{#str}}submitportfolio, assignsubmission_portfolio{{/str}}{{/issubmit}}
+      {{#isresubmit}}{{#str}}resubmitportfolio, assignsubmission_portfolio{{/str}}{{/isresubmit}}
     </button>
   </div>
-
-  <script>
-    (function() {
-      const allComplete = {{#allcomplete}}true{{/allcomplete}}{{^allcomplete}}false{{/allcomplete}};
-      const integrityEnabled = {{#integritycheckenabled}}true{{/integritycheckenabled}}{{^integritycheckenabled}}false{{/integritycheckenabled}};
-
-      const checkbox = document.getElementById('portfolio-integrity-check');
-      const submitBtn = document.getElementById('portfolio-submit-btn');
-
-      function updateSubmitState() {
-        if (!submitBtn) { return; }
-        const checked = checkbox && checkbox.checked;
-        submitBtn.disabled = !(allComplete && integrityEnabled && checked);
-      }
-
-      if (checkbox) {
-        checkbox.addEventListener('change', updateSubmitState);
-      }
-
-      updateSubmitState();
-
-      // NOTE: In the next step we’ll wire this button to a Moodle endpoint
-      // (e.g., via AJAX or a form POST) that triggers the final collation and submission.
-      if (submitBtn) {
-        submitBtn.addEventListener('click', function() {
-          // Placeholder for submission action.
-          // You can replace this with an AJAX call later.
-          alert('Submission action not yet implemented.');
-        });
-      }
-    })();
-  </script>
 
 </div>

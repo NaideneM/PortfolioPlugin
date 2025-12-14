@@ -26,7 +26,9 @@ $string['missingmodules'] = 'Some modules are incomplete. You must complete all 
 $string['cannotpreview'] = 'The portfolio preview cannot be generated at this time.';
 $string['generatingpreview'] = 'Generating preview… please wait.';
 
-$string['event:portfoliosubmitted'] = 'Portfolio submitted';
-$string['event:portfolioresubmitted'] = 'Portfolio resubmitted';
+// Event strings.
+$string['event_portfolio_submitted'] = 'Portfolio submitted';
+$string['event_portfolio_resubmitted'] = 'Portfolio resubmitted';
 
+// Privacy.
 $string['privacy:metadata'] = 'This plugin stores the generated portfolio PDF as part of the student’s assignment submission.';

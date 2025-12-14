@@ -34,10 +34,6 @@ class assignsubmission_portfolio_helper {
 
     /**
      * Retrieve the latest DOCX file for a module (core Moodle H5P).
-     *
-     * @param int $userid
-     * @param int $cmid
-     * @return stored_file|null
      */
     public static function get_latest_module_docx(
         int $userid,
@@ -47,9 +43,7 @@ class assignsubmission_portfolio_helper {
         $context = context_module::instance($cmid);
         $fs = get_file_storage();
 
-        // Common H5P file areas where exports appear.
         $fileareas = ['export', 'content', 'package'];
-
         $latestfile = null;
         $latesttime = 0;
 
@@ -83,13 +77,7 @@ class assignsubmission_portfolio_helper {
     }
 
     /**
-     * Check whether the student has completed each configured module.
-     *
-     * Completion = DOCX exists.
-     *
-     * @param int $userid
-     * @param array $modules module_number => cmid
-     * @return array module_number => bool
+     * Module completion = DOCX exists.
      */
     public static function get_module_completion_status(
         int $userid,
@@ -107,10 +95,7 @@ class assignsubmission_portfolio_helper {
     }
 
     /**
-     * Determine if all modules are completed.
-     *
-     * @param array $completionstatus
-     * @return bool
+     * Check if all modules are complete.
      */
     public static function all_modules_complete(array $completionstatus): bool {
         foreach ($completionstatus as $status) {
@@ -122,7 +107,7 @@ class assignsubmission_portfolio_helper {
     }
 
     /**
-     * Returns the URL for the preview PDF shown in the iframe.
+     * Preview PDF URL.
      */
     public static function get_preview_pdf_url(
         int $userid,
@@ -141,7 +126,7 @@ class assignsubmission_portfolio_helper {
     }
 
     /**
-     * Prepare data for the submission page renderer.
+     * Prepare data for submission page.
      */
     public static function prepare_submission_page_data(
         int $userid,
@@ -156,111 +141,195 @@ class assignsubmission_portfolio_helper {
         return [
             'modules' => $modules,
             'completion' => $completion,
-
             'allcomplete' => $allcomplete,
             'integritycheckenabled' => $allcomplete,
             'submitenabled' => $allcomplete,
-
             'previewurl' => self::get_preview_pdf_url($userid, $assignid, $cmid),
         ];
     }
 }
 
 /* =========================================================================
- * DOCX ASSEMBLY (Phase K3)
+ * Platform / environment helpers
  * ========================================================================= */
 
 /**
- * Assemble the portfolio DOCX from module documents.
- *
- * @param int $userid
- * @param int $assignid
- * @return string Path to assembled DOCX file
+ * Detect Windows OS.
+ */
+function assignsubmission_portfolio_is_windows(): bool {
+    return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+}
+
+/**
+ * Check if LibreOffice is available (Linux only).
+ */
+function assignsubmission_portfolio_has_libreoffice(): bool {
+    if (assignsubmission_portfolio_is_windows()) {
+        return false;
+    }
+    @exec('soffice --version', $out, $code);
+    return $code === 0;
+}
+
+/* =========================================================================
+ * DOCX assembly
+ * ========================================================================= */
+
+/**
+ * Assemble portfolio DOCX from module documents.
  */
 function assignsubmission_portfolio_assemble_docx(
     int $userid,
     int $assignid
 ): string {
 
-    global $CFG, $DB;
+    global $DB;
 
-    // Temporary working directory.
     $tempdir = make_temp_directory('portfolio_' . $userid . '_' . $assignid);
-    $outfile = $tempdir . '/portfolio.docx';
+    $workdir = $tempdir . '/work';
+    check_dir_exists($workdir, true, true);
 
-    // Load assignment + user.
     $assign = $DB->get_record('assign', ['id' => $assignid], '*', MUST_EXIST);
     $user   = $DB->get_record('user', ['id' => $userid], '*', MUST_EXIST);
 
-    // NOTE:
-    // PhpWord is not yet bundled. This is a safe structural stub.
-    // In Phase K4 we will either:
-    //  - bundle PhpWord, or
-    //  - swap to LibreOffice conversion.
+    $modules  = assignsubmission_portfolio_helper::get_module_ids($assignid);
+    $sections = [];
 
-    $content = "Portfolio DOCX (stub)\n\n"
-             . "Student: {$user->firstname} {$user->lastname}\n"
-             . "Assignment: {$assign->name}\n\n";
-
-    $modules = assignsubmission_portfolio_helper::get_module_ids($assignid);
-
-    foreach ($modules as $modulenumber => $cmid) {
+    foreach ($modules as $number => $cmid) {
         $docx = assignsubmission_portfolio_helper::get_latest_module_docx(
             $userid,
             $cmid
         );
 
         if ($docx) {
-            $content .= "Module {$modulenumber}: DOCX found ({$docx->get_filename()})\n";
-        } else {
-            $content .= "Module {$modulenumber}: No document\n";
+            $path = $workdir . "/module_{$number}.docx";
+            $docx->copy_content_to($path);
+            $sections[] = [
+                'number' => $number,
+                'path'   => $path,
+            ];
         }
     }
 
-    // Write stub DOCX (plain text for now).
-    file_put_contents($outfile, $content);
+    if (empty($sections)) {
+        throw new moodle_exception('No module documents found to assemble.');
+    }
 
-    return $outfile;
+    // Windows fallback: create a placeholder DOCX.
+    if (assignsubmission_portfolio_is_windows()) {
+        $outfile = $tempdir . '/portfolio_stub.docx';
+        $content = "PORTFOLIO (Windows fallback)\n\n"
+                 . "Student: {$user->firstname} {$user->lastname}\n"
+                 . "Assignment: {$assign->name}\n\n";
+
+        foreach ($sections as $section) {
+            $content .= "Module {$section['number']} included.\n";
+        }
+
+        file_put_contents($outfile, $content);
+        return $outfile;
+    }
+
+    // Linux: real LibreOffice master document.
+    $masterodt = $workdir . '/portfolio_master.odt';
+    assignsubmission_portfolio_create_master_odt(
+        $masterodt,
+        $sections,
+        $user,
+        $assign
+    );
+
+    exec(
+        'soffice --headless --convert-to docx --outdir ' .
+        escapeshellarg($tempdir) . ' ' .
+        escapeshellarg($masterodt)
+    );
+
+    $finaldocx = $tempdir . '/portfolio_master.docx';
+
+    if (!file_exists($finaldocx)) {
+        throw new moodle_exception('Failed to generate final DOCX.');
+    }
+
+    return $finaldocx;
+}
+
+/**
+ * Convert DOCX to PDF using LibreOffice.
+ */
+function assignsubmission_portfolio_convert_docx_to_pdf(string $docxpath): string {
+
+    if (assignsubmission_portfolio_is_windows()) {
+        return '';
+    }
+
+    $outdir = dirname($docxpath);
+
+    exec(
+        'soffice --headless --convert-to pdf --outdir ' .
+        escapeshellarg($outdir) . ' ' .
+        escapeshellarg($docxpath)
+    );
+
+    $pdfpath = preg_replace('/\.docx$/', '.pdf', $docxpath);
+
+    if (!file_exists($pdfpath)) {
+        throw new moodle_exception('Failed to convert DOCX to PDF.');
+    }
+
+    return $pdfpath;
 }
 
 /* =========================================================================
- * PREVIEW / SUBMISSION OUTPUT
+ * Preview / submission output
  * ========================================================================= */
 
 /**
- * Generate preview PDF (temporary stub).
+ * Generate preview PDF.
  */
 function assignsubmission_portfolio_generate_preview_pdf(
     stdClass $assign,
     int $userid
 ): string {
 
-    $docxpath = assignsubmission_portfolio_assemble_docx(
+    $docx = assignsubmission_portfolio_assemble_docx(
         $userid,
         $assign->id
     );
 
-    return assignsubmission_portfolio_render_pdf(
-        "Preview generated.\n\nAssembled DOCX:\n{$docxpath}"
-    );
+    if (assignsubmission_portfolio_is_windows()) {
+        return assignsubmission_portfolio_render_pdf(
+            "Preview mode (Windows)\n\nDOCX assembled successfully:\n{$docx}\n\n" .
+            "Full PDF generation runs on Linux servers."
+        );
+    }
+
+    $pdf = assignsubmission_portfolio_convert_docx_to_pdf($docx);
+    return file_get_contents($pdf);
 }
 
 /**
- * Generate final portfolio PDF (temporary stub).
+ * Generate final submission PDF.
  */
 function assignsubmission_portfolio_generate_final_pdf(
     int $userid,
     int $assignid
 ): string {
 
-    $docxpath = assignsubmission_portfolio_assemble_docx(
+    $docx = assignsubmission_portfolio_assemble_docx(
         $userid,
         $assignid
     );
 
-    return assignsubmission_portfolio_render_pdf(
-        "Final submission generated.\n\nAssembled DOCX:\n{$docxpath}"
-    );
+    if (assignsubmission_portfolio_is_windows()) {
+        return assignsubmission_portfolio_render_pdf(
+            "Submission received (Windows fallback).\n\nDOCX:\n{$docx}\n\n" .
+            "Final PDF will be generated on Linux server."
+        );
+    }
+
+    $pdf = assignsubmission_portfolio_convert_docx_to_pdf($docx);
+    return file_get_contents($pdf);
 }
 
 /**

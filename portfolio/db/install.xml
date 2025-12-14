@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <XMLDB PATH="mod/assign/submission/portfolio/db"
-       VERSION="2025121200"
+       VERSION="2025121300"
        COMMENT="XMLDB file for assignsubmission_portfolio">
 
     <TABLES>

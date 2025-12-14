@@ -11,20 +11,22 @@ use context_module;
 class attempts_manager {
 
     /**
-     * Store a generated portfolio file for an attempt.
+     * Store generated portfolio files for an attempt.
      *
      * @param int $userid
      * @param int $assignid
      * @param int $submissionid
      * @param string $pdfcontent
+     * @param string|null $docxpath
      * @param int $cmid
      * @return void
      */
-    public static function store_submission_file(
+    public static function store_submission_files(
         int $userid,
         int $assignid,
         int $submissionid,
         string $pdfcontent,
+        ?string $docxpath,
         int $cmid
     ): void {
 
@@ -39,15 +41,26 @@ class attempts_manager {
             $submissionid
         );
 
-        $fileinfo = [
+        // Store PDF.
+        $fs->create_file_from_string([
             'contextid' => $context->id,
             'component' => 'assignsubmission_portfolio',
             'filearea'  => 'submission_files',
             'itemid'    => $submissionid,
             'filepath'  => '/',
             'filename'  => 'Portfolio.pdf',
-        ];
+        ], $pdfcontent);
 
-        $fs->create_file_from_string($fileinfo, $pdfcontent);
+        // Store DOCX if available.
+        if ($docxpath && file_exists($docxpath)) {
+            $fs->create_file_from_pathname([
+                'contextid' => $context->id,
+                'component' => 'assignsubmission_portfolio',
+                'filearea'  => 'submission_files',
+                'itemid'    => $submissionid,
+                'filepath'  => '/',
+                'filename'  => 'Portfolio.docx',
+            ], $docxpath);
+        }
     }
 }

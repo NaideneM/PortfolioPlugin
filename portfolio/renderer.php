@@ -2,10 +2,14 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-require_once(__DIR__ . '/locallib.php');
-
+/**
+ * Renderer for the Portfolio submission plugin.
+ */
 class assignsubmission_portfolio_renderer extends plugin_renderer_base {
 
+    /**
+     * Render the submission page for a student.
+     */
     public function render_submission_page(
         int $userid,
         int $assignid,

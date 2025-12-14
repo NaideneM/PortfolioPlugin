@@ -8,13 +8,6 @@ defined('MOODLE_INTERNAL') || die();
  */
 class generator {
 
-    /**
-     * Generate preview PDF.
-     *
-     * @param int $userid
-     * @param int $assignid
-     * @return string
-     */
     public static function generate_preview_pdf(
         int $userid,
         int $assignid
@@ -30,13 +23,6 @@ class generator {
         );
     }
 
-    /**
-     * Generate final submission PDF.
-     *
-     * @param int $userid
-     * @param int $assignid
-     * @return string
-     */
     public static function generate_final_pdf(
         int $userid,
         int $assignid

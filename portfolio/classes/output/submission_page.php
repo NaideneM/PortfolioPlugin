@@ -13,41 +13,24 @@ use renderer_base;
  */
 class submission_page implements renderable, templatable {
 
-    /** @var array */
-    protected $data;
+    protected array $data;
 
-    /**
-     * Constructor.
-     *
-     * @param array $data Prepared submission page data
-     */
     public function __construct(array $data) {
         $this->data = $data;
     }
 
-    /**
-     * Export data for the Mustache template.
-     *
-     * @param renderer_base $output
-     * @return array
-     */
     public function export_for_template(renderer_base $output): array {
 
         $modules = [];
 
-        // Build module list in template-friendly format.
-        if (!empty($this->data['modules'])) {
-            foreach ($this->data['modules'] as $moduleid) {
-                $modules[] = [
-                    'id' => $moduleid,
-                    'completed' => !empty($this->data['completion'][$moduleid]),
-                ];
-            }
+        foreach ($this->data['modules'] as $number => $cmid) {
+            $modules[] = [
+                'number' => $number,
+                'completed' => !empty($this->data['completion'][$number]),
+            ];
         }
 
-        // Determine submit vs resubmit state.
-        // For now, default to first submission.
-        // Later we will inspect assignment attempt history.
+        // Placeholder logic — later tied to attempt history.
         $issubmit = true;
         $isresubmit = false;
 
@@ -56,14 +39,12 @@ class submission_page implements renderable, templatable {
 
             'modules' => $modules,
 
-            'allcomplete' => !empty($this->data['allcomplete']),
-            'integritycheckenabled' => !empty($this->data['integritycheckenabled']),
-            'submitenabled' => !empty($this->data['submitenabled']),
+            'allcomplete' => (bool)$this->data['allcomplete'],
+            'integritycheckenabled' => (bool)$this->data['integritycheckenabled'],
+            'submitenabled' => (bool)$this->data['submitenabled'],
 
             'issubmit' => $issubmit,
             'isresubmit' => $isresubmit,
-
-            'submittype' => $issubmit ? 'submit' : 'resubmit',
         ];
     }
 }

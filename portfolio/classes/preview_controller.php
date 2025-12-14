@@ -12,14 +12,6 @@ use stdClass;
  */
 class preview_controller {
 
-    /**
-     * Generate preview PDF content.
-     *
-     * @param stdClass $assign
-     * @param int $userid
-     * @param int $cmid
-     * @return string PDF binary
-     */
     public static function generate_preview(
         stdClass $assign,
         int $userid,
@@ -28,7 +20,6 @@ class preview_controller {
 
         $context = context_module::instance($cmid);
 
-        // Capability check.
         if ($userid !== $GLOBALS['USER']->id &&
             !has_capability('mod/assign:grade', $context)) {
 
@@ -40,7 +31,6 @@ class preview_controller {
             );
         }
 
-        // Delegate to generator.
         return generator::generate_preview_pdf(
             $userid,
             $assign->id
