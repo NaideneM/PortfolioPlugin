@@ -11,14 +11,36 @@ require_once($CFG->dirroot . '/mod/assign/submissionplugin.php');
  */
 class assign_submission_portfolio extends assign_submission_plugin {
 
+    /**
+     * Is this submission plugin enabled?
+     */
     public function is_enabled(): bool {
         return assignsubmission_portfolio_is_enabled();
     }
 
+    /**
+     * Are submissions allowed?
+     */
     public function is_submission_allowed(): bool {
         return true;
     }
 
+    /**
+     * Add plugin-specific settings to the assignment settings form (Module 1–5 selectors).
+     */
+    public function get_settings(MoodleQuickForm $mform): void {
+        if (!$this->is_enabled()) {
+            // Still show settings if admins want to configure while disabled globally?
+            // In Moodle, it’s usually fine to always show. We'll show regardless.
+        }
+        assignsubmission_portfolio_get_settings($mform);
+    }
+
+    /**
+     * Add form elements shown to students.
+     *
+     * Moodle owns the form submit button — we only add fields here.
+     */
     public function get_form_elements_for_user(
         MoodleQuickForm $mform,
         stdClass $submission,
@@ -30,6 +52,7 @@ class assign_submission_portfolio extends assign_submission_plugin {
             return;
         }
 
+        // Academic integrity declaration.
         $mform->addElement(
             'advcheckbox',
             'integrity_check',
@@ -37,6 +60,7 @@ class assign_submission_portfolio extends assign_submission_plugin {
             get_string('integritycheck', 'assignsubmission_portfolio')
         );
 
+        // Client-side required rule.
         $mform->addRule(
             'integrity_check',
             null,
@@ -46,22 +70,29 @@ class assign_submission_portfolio extends assign_submission_plugin {
         );
     }
 
+    /**
+     * Validate submission (server-side).
+     */
     public function validate(
         stdClass $data,
         array $files,
         array &$errors
     ): void {
 
-        if (empty($data->integrity_check)) {
-            $errors['integrity_check'] =
-                get_string('integritycheck', 'assignsubmission_portfolio');
-        }
+        // Delegate to shared validation logic (keeps behaviour consistent).
+        assignsubmission_portfolio_validate($data, $files, $errors);
     }
 
+    /**
+     * Save submission.
+     */
     public function save(stdClass $submission, stdClass $data): bool {
         return assignsubmission_portfolio_save($submission, $data);
     }
 
+    /**
+     * Render student view (preview, module status, messaging).
+     */
     public function view(stdClass $submission): string {
         return assignsubmission_portfolio_view(
             $submission,
@@ -70,6 +101,9 @@ class assign_submission_portfolio extends assign_submission_plugin {
         );
     }
 
+    /**
+     * Files for grading / download.
+     */
     public function get_files(
         stdClass $submission,
         stdClass $context
@@ -77,6 +111,9 @@ class assign_submission_portfolio extends assign_submission_plugin {
         return assignsubmission_portfolio_get_files($submission, $context);
     }
 
+    /**
+     * Summary shown to tutors in grading table.
+     */
     public function view_summary(
         stdClass $submission,
         stdClass $context,
@@ -89,6 +126,9 @@ class assign_submission_portfolio extends assign_submission_plugin {
         );
     }
 
+    /**
+     * Has the user submitted?
+     */
     public function has_user_submitted(stdClass $submission): bool {
         $files = assignsubmission_portfolio_get_files(
             $submission,
@@ -97,6 +137,9 @@ class assign_submission_portfolio extends assign_submission_plugin {
         return !empty($files);
     }
 
+    /**
+     * Delete submission instance (no custom cleanup needed).
+     */
     public function delete_instance(): bool {
         return true;
     }

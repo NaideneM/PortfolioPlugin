@@ -7,33 +7,33 @@ use context_module;
 
 /**
  * Handles portfolio submission attempts.
+ *
+ * Responsible for storing the final generated PDF
+ * for each assignment submission attempt.
  */
 class attempts_manager {
 
     /**
-     * Store generated portfolio files for an attempt.
+     * Store generated portfolio PDF for a submission attempt.
      *
-     * @param int $userid
      * @param int $submissionid
      * @param string $pdfcontent
-     * @param string|null $docxpath
      * @param int $cmid
      * @return void
      */
     public static function store_submission_files(
-        int $userid,
         int $submissionid,
         string $pdfcontent,
-        ?string $docxpath,
         int $cmid
     ): void {
 
         $fs = get_file_storage();
         $context = context_module::instance($cmid);
 
+        // Ensure the user has permission to submit.
         require_capability('mod/assign:submit', $context);
 
-        // Remove files for this attempt only.
+        // Remove any existing files for this submission attempt.
         $fs->delete_area_files(
             $context->id,
             'assignsubmission_portfolio',
@@ -41,7 +41,7 @@ class attempts_manager {
             $submissionid
         );
 
-        // Store PDF.
+        // Store the final portfolio PDF.
         $fs->create_file_from_string([
             'contextid' => $context->id,
             'component' => 'assignsubmission_portfolio',
@@ -50,17 +50,5 @@ class attempts_manager {
             'filepath'  => '/',
             'filename'  => 'Portfolio.pdf',
         ], $pdfcontent);
-
-        // Store DOCX if available.
-        if ($docxpath && file_exists($docxpath)) {
-            $fs->create_file_from_pathname([
-                'contextid' => $context->id,
-                'component' => 'assignsubmission_portfolio',
-                'filearea'  => 'submission_files',
-                'itemid'    => $submissionid,
-                'filepath'  => '/',
-                'filename'  => 'Portfolio.docx',
-            ], $docxpath);
-        }
     }
 }

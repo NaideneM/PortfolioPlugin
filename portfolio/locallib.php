@@ -2,6 +2,13 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+require_once(__DIR__ . '/vendor/autoload.php');
+
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\IOFactory;
+use Dompdf\Dompdf;
+use Dompdf\Options;
+
 /**
  * Portfolio helper functions.
  */
@@ -19,7 +26,6 @@ class assignsubmission_portfolio_helper {
         global $DB;
 
         $assign = $DB->get_record('assign', ['id' => $assignid], '*', MUST_EXIST);
-
         $modules = [];
 
         for ($i = 1; $i <= 5; $i++) {
@@ -150,139 +156,89 @@ class assignsubmission_portfolio_helper {
 }
 
 /* =========================================================================
- * Platform / environment helpers
+ * DOCX → HTML → PDF (PRODUCTION PIPELINE)
  * ========================================================================= */
 
 /**
- * Detect Windows OS.
+ * Merge module DOCX files into a single HTML document.
  */
-function assignsubmission_portfolio_is_windows(): bool {
-    return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
-}
-
-/**
- * Check if LibreOffice is available (Linux only).
- */
-function assignsubmission_portfolio_has_libreoffice(): bool {
-    if (assignsubmission_portfolio_is_windows()) {
-        return false;
-    }
-    @exec('soffice --version', $out, $code);
-    return $code === 0;
-}
-
-/* =========================================================================
- * DOCX assembly
- * ========================================================================= */
-
-/**
- * Assemble portfolio DOCX from module documents.
- */
-function assignsubmission_portfolio_assemble_docx(
+function assignsubmission_portfolio_merge_docx_to_html(
     int $userid,
     int $assignid
 ): string {
 
     global $DB;
 
-    $tempdir = make_temp_directory('portfolio_' . $userid . '_' . $assignid);
-    $workdir = $tempdir . '/work';
-    check_dir_exists($workdir, true, true);
+    $phpWord = new PhpWord();
+    $section = $phpWord->addSection();
 
     $assign = $DB->get_record('assign', ['id' => $assignid], '*', MUST_EXIST);
     $user   = $DB->get_record('user', ['id' => $userid], '*', MUST_EXIST);
 
-    $modules  = assignsubmission_portfolio_helper::get_module_ids($assignid);
-    $sections = [];
+    // Cover page
+    $section->addTitle('Portfolio', 1);
+    $section->addText("Student: {$user->firstname} {$user->lastname}");
+    $section->addText("Assignment: {$assign->name}");
+    $section->addTextBreak(2);
+
+    $modules = assignsubmission_portfolio_helper::get_module_ids($assignid);
+
+    if (empty($modules)) {
+        throw new moodle_exception('No modules configured for this assignment.');
+    }
 
     foreach ($modules as $number => $cmid) {
-        $docx = assignsubmission_portfolio_helper::get_latest_module_docx(
+        $storedfile = assignsubmission_portfolio_helper::get_latest_module_docx(
             $userid,
             $cmid
         );
 
-        if ($docx) {
-            $path = $workdir . "/module_{$number}.docx";
-            $docx->copy_content_to($path);
-            $sections[] = [
-                'number' => $number,
-                'path'   => $path,
-            ];
+        if (!$storedfile) {
+            continue;
+        }
+
+        $tmp = make_temp_directory('portfolio_docx');
+        $docxpath = $tmp . "/module_{$number}.docx";
+        $storedfile->copy_content_to($docxpath);
+
+        $section->addPageBreak();
+        $section->addTitle("Module {$number}", 2);
+
+        $reader = IOFactory::createReader('Word2007');
+        $moduleDoc = $reader->load($docxpath);
+
+        foreach ($moduleDoc->getSections() as $modSection) {
+            foreach ($modSection->getElements() as $element) {
+                $section->addElement(clone $element);
+            }
         }
     }
 
-    if (empty($sections)) {
-        throw new moodle_exception('No module documents found to assemble.');
-    }
+    // Convert merged PhpWord → HTML
+    $writer = IOFactory::createWriter($phpWord, 'HTML');
+    ob_start();
+    $writer->save('php://output');
+    $html = ob_get_clean();
 
-    // Windows fallback: create a placeholder DOCX.
-    if (assignsubmission_portfolio_is_windows()) {
-        $outfile = $tempdir . '/portfolio_stub.docx';
-        $content = "PORTFOLIO (Windows fallback)\n\n"
-                 . "Student: {$user->firstname} {$user->lastname}\n"
-                 . "Assignment: {$assign->name}\n\n";
-
-        foreach ($sections as $section) {
-            $content .= "Module {$section['number']} included.\n";
-        }
-
-        file_put_contents($outfile, $content);
-        return $outfile;
-    }
-
-    // Linux: real LibreOffice master document.
-    $masterodt = $workdir . '/portfolio_master.odt';
-    assignsubmission_portfolio_create_master_odt(
-        $masterodt,
-        $sections,
-        $user,
-        $assign
-    );
-
-    exec(
-        'soffice --headless --convert-to docx --outdir ' .
-        escapeshellarg($tempdir) . ' ' .
-        escapeshellarg($masterodt)
-    );
-
-    $finaldocx = $tempdir . '/portfolio_master.docx';
-
-    if (!file_exists($finaldocx)) {
-        throw new moodle_exception('Failed to generate final DOCX.');
-    }
-
-    return $finaldocx;
+    return $html;
 }
 
 /**
- * Convert DOCX to PDF using LibreOffice.
+ * Render HTML to PDF using DomPDF.
  */
-function assignsubmission_portfolio_convert_docx_to_pdf(string $docxpath): string {
+function assignsubmission_portfolio_render_pdf_from_html(string $html): string {
 
-    if (assignsubmission_portfolio_is_windows()) {
-        return '';
-    }
+    $options = new Options();
+    $options->set('isRemoteEnabled', true);
+    $options->set('defaultFont', 'Helvetica');
 
-    $outdir = dirname($docxpath);
+    $dompdf = new Dompdf($options);
+    $dompdf->loadHtml($html);
+    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->render();
 
-    exec(
-        'soffice --headless --convert-to pdf --outdir ' .
-        escapeshellarg($outdir) . ' ' .
-        escapeshellarg($docxpath)
-    );
-
-    $pdfpath = preg_replace('/\.docx$/', '.pdf', $docxpath);
-
-    if (!file_exists($pdfpath)) {
-        throw new moodle_exception('Failed to convert DOCX to PDF.');
-    }
-
-    return $pdfpath;
+    return $dompdf->output();
 }
-
-/* =========================================================================
- * Preview / submission output
- * ========================================================================= */
 
 /**
  * Generate preview PDF.
@@ -292,20 +248,12 @@ function assignsubmission_portfolio_generate_preview_pdf(
     int $userid
 ): string {
 
-    $docx = assignsubmission_portfolio_assemble_docx(
+    $html = assignsubmission_portfolio_merge_docx_to_html(
         $userid,
         $assign->id
     );
 
-    if (assignsubmission_portfolio_is_windows()) {
-        return assignsubmission_portfolio_render_pdf(
-            "Preview mode (Windows)\n\nDOCX assembled successfully:\n{$docx}\n\n" .
-            "Full PDF generation runs on Linux servers."
-        );
-    }
-
-    $pdf = assignsubmission_portfolio_convert_docx_to_pdf($docx);
-    return file_get_contents($pdf);
+    return assignsubmission_portfolio_render_pdf_from_html($html);
 }
 
 /**
@@ -316,41 +264,10 @@ function assignsubmission_portfolio_generate_final_pdf(
     int $assignid
 ): string {
 
-    $docx = assignsubmission_portfolio_assemble_docx(
+    $html = assignsubmission_portfolio_merge_docx_to_html(
         $userid,
         $assignid
     );
 
-    if (assignsubmission_portfolio_is_windows()) {
-        return assignsubmission_portfolio_render_pdf(
-            "Submission received (Windows fallback).\n\nDOCX:\n{$docx}\n\n" .
-            "Final PDF will be generated on Linux server."
-        );
-    }
-
-    $pdf = assignsubmission_portfolio_convert_docx_to_pdf($docx);
-    return file_get_contents($pdf);
-}
-
-/**
- * Minimal PDF renderer.
- */
-function assignsubmission_portfolio_render_pdf(string $text): string {
-
-    $text = str_replace(['(', ')'], ['\\(', '\\)'], $text);
-
-    $pdf  = "%PDF-1.4\n";
-    $pdf .= "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n";
-    $pdf .= "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n";
-    $pdf .= "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-          . "/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n";
-    $pdf .= "4 0 obj << /Length " . strlen($text) . " >> stream\n";
-    $pdf .= "BT /F1 12 Tf 72 720 Td ({$text}) Tj ET\n";
-    $pdf .= "endstream endobj\n";
-    $pdf .= "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n";
-    $pdf .= "xref\n0 6\n0000000000 65535 f \n";
-    $pdf .= "trailer << /Size 6 /Root 1 0 R >>\n";
-    $pdf .= "startxref\n" . strlen($pdf) . "\n%%EOF";
-
-    return $pdf;
+    return assignsubmission_portfolio_render_pdf_from_html($html);
 }

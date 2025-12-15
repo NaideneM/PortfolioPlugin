@@ -23,10 +23,6 @@ function assignsubmission_portfolio_is_enabled(): bool {
 
 /**
  * Add submission settings to the assignment settings form.
- *
- * @param MoodleQuickForm $mform
- * @param stdClass $assignment
- * @param context $context
  */
 function assignsubmission_portfolio_get_settings(
     MoodleQuickForm $mform,
@@ -35,7 +31,6 @@ function assignsubmission_portfolio_get_settings(
 ): void {
     global $COURSE;
 
-    // Enable portfolio submission.
     $mform->addElement(
         'advcheckbox',
         'assignsubmission_portfolio_enabled',
@@ -47,27 +42,22 @@ function assignsubmission_portfolio_get_settings(
         get_config('assignsubmission_portfolio', 'default')
     );
 
-    // Header for module configuration.
     $mform->addElement(
         'header',
         'assignsubmission_portfolio_modules_header',
         get_string('modulestatusheading', 'assignsubmission_portfolio')
     );
 
-    // Build activity selector list.
     $modinfo = get_fast_modinfo($COURSE);
     $activityoptions = [0 => get_string('none')];
 
     foreach ($modinfo->cms as $cm) {
-        if (!$cm->uservisible) {
-            continue;
+        if ($cm->uservisible) {
+            $activityoptions[$cm->id] =
+                format_string($cm->name) . ' (' . $cm->modname . ')';
         }
-
-        $activityoptions[$cm->id] =
-            format_string($cm->name) . ' (' . $cm->modname . ')';
     }
 
-    // Fixed Module 1–5 selectors.
     for ($i = 1; $i <= 5; $i++) {
         $mform->addElement(
             'select',
@@ -90,7 +80,6 @@ function assignsubmission_portfolio_view(
 
     global $PAGE;
 
-    /** @var assignsubmission_portfolio_renderer $renderer */
     $renderer = $PAGE->get_renderer('assignsubmission_portfolio');
 
     return $renderer->render_submission_page(
@@ -101,7 +90,7 @@ function assignsubmission_portfolio_view(
 }
 
 /**
- * Validate before submission (server-side).
+ * Validate before submission.
  */
 function assignsubmission_portfolio_validate(
     stdClass $data,
@@ -113,8 +102,7 @@ function assignsubmission_portfolio_validate(
         return;
     }
 
-    // Integrity checkbox is optional until form submission is finalised.
-    if (isset($data->integrity_check) && empty($data->integrity_check)) {
+    if (empty($data->integrity_check)) {
         $errors['integrity_check'] =
             get_string('integritycheck', 'assignsubmission_portfolio');
     }
@@ -139,48 +127,52 @@ function assignsubmission_portfolio_save(
     $context = context_module::instance($cmid);
     require_capability('mod/assign:submit', $context);
 
-    // Assemble DOCX.
-    $docxpath = assignsubmission_portfolio_assemble_docx(
+    // === PRODUCTION PIPELINE ===
+    // DOCX → HTML → PDF
+
+    $assign = $GLOBALS['DB']->get_record(
+        'assign',
+        ['id' => $assignid],
+        '*',
+        MUST_EXIST
+    );
+
+    // Merge DOCX files to HTML
+    $html = assignsubmission_portfolio_merge_docx_to_html(
         $userid,
         $assignid
     );
 
-    // Convert DOCX → PDF.
-    $pdfpath = assignsubmission_portfolio_convert_docx_to_pdf($docxpath);
-    $pdfcontent = file_get_contents($pdfpath);
+    // Convert HTML to PDF using DomPDF
+    $pdfcontent = assignsubmission_portfolio_render_pdf_from_html($html);
 
-    // Store files for this attempt.
+    // Store PDF (DOCX no longer stored)
     attempts_manager::store_submission_files(
-        $userid,
         $submission->id,
         $pdfcontent,
-        $docxpath,
         $cmid
     );
 
-    // Trigger submission event.
+    // Trigger portfolio submitted event
     $event = portfolio_submitted::create([
         'objectid' => $submission->id,
         'context'  => $context,
         'userid'   => $userid,
     ]);
-
     $event->trigger();
 
     return true;
 }
 
 /**
- * Provide submission files to Moodle (grading, preview, download).
+ * Provide submission files to Moodle.
  */
 function assignsubmission_portfolio_get_files(
     stdClass $submission,
     context $context
 ): array {
 
-    $fs = get_file_storage();
-
-    return $fs->get_area_files(
+    return get_file_storage()->get_area_files(
         $context->id,
         'assignsubmission_portfolio',
         'submission_files',
@@ -191,7 +183,7 @@ function assignsubmission_portfolio_get_files(
 }
 
 /**
- * Describe file areas for this submission plugin.
+ * Describe file areas.
  */
 function assignsubmission_portfolio_get_file_areas(): array {
     return [
@@ -201,7 +193,7 @@ function assignsubmission_portfolio_get_file_areas(): array {
 }
 
 /**
- * Display a summary of the submission for the grading table.
+ * Summary for grading table.
  */
 function assignsubmission_portfolio_view_summary(
     stdClass $submission,
@@ -209,16 +201,7 @@ function assignsubmission_portfolio_view_summary(
     string $linktext = ''
 ): string {
 
-    $fs = get_file_storage();
-
-    $files = $fs->get_area_files(
-        $context->id,
-        'assignsubmission_portfolio',
-        'submission_files',
-        $submission->id,
-        'filename',
-        false
-    );
+    $files = assignsubmission_portfolio_get_files($submission, $context);
 
     if (empty($files)) {
         return get_string('nosubmission', 'assign');
@@ -236,22 +219,9 @@ function assignsubmission_portfolio_view_summary(
         true
     );
 
-    $attempt = isset($submission->attemptnumber)
-        ? $submission->attemptnumber + 1
-        : 1;
-
-    $submitted = userdate($submission->timemodified);
-
-    return html_writer::div(
-        html_writer::link(
-            $url,
-            get_string('submission', 'assignsubmission_portfolio'),
-            ['target' => '_blank']
-        ) .
-        html_writer::empty_tag('br') .
-        html_writer::span("Attempt {$attempt}") .
-        html_writer::empty_tag('br') .
-        html_writer::span("Submitted: {$submitted}"),
-        'assignsubmission-portfolio-summary'
+    return html_writer::link(
+        $url,
+        get_string('submission', 'assignsubmission_portfolio'),
+        ['target' => '_blank']
     );
 }
