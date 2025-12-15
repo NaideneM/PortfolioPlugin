@@ -1,7 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <XMLDB PATH="mod/assign/submission/portfolio/db"
-       VERSION="2025021300"
+       VERSION="2025021400"
        COMMENT="XMLDB file for assignsubmission_portfolio">
+
     <TABLES>
+
+        <TABLE NAME="assignsubmission_portfolio_dummy"
+               COMMENT="Dummy table required for XMLDB validation">
+
+            <FIELDS>
+                <FIELD NAME="id"
+                       TYPE="int"
+                       LENGTH="10"
+                       NOTNULL="true"
+                       SEQUENCE="true"/>
+            </FIELDS>
+
+            <KEYS>
+                <KEY NAME="primary"
+                     TYPE="primary"
+                     FIELDS="id"/>
+            </KEYS>
+
+        </TABLE>
+
     </TABLES>
+
 </XMLDB>
