@@ -14,7 +14,6 @@ class attempts_manager {
      * Store generated portfolio files for an attempt.
      *
      * @param int $userid
-     * @param int $assignid
      * @param int $submissionid
      * @param string $pdfcontent
      * @param string|null $docxpath
@@ -23,7 +22,6 @@ class attempts_manager {
      */
     public static function store_submission_files(
         int $userid,
-        int $assignid,
         int $submissionid,
         string $pdfcontent,
         ?string $docxpath,
@@ -32,6 +30,8 @@ class attempts_manager {
 
         $fs = get_file_storage();
         $context = context_module::instance($cmid);
+
+        require_capability('mod/assign:submit', $context);
 
         // Remove files for this attempt only.
         $fs->delete_area_files(

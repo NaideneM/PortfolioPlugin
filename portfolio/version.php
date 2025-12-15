@@ -8,7 +8,7 @@ defined('MOODLE_INTERNAL') || die();
  */
 
 $plugin->component = 'assignsubmission_portfolio';   // Full plugin name.
-$plugin->version   = 2025021401;                     // YYYYMMDDVV.
+$plugin->version   = 2025021402;                     // YYYYMMDDVV.
 $plugin->requires  = 2022041900;                     // Moodle 4.0 minimum.
 $plugin->maturity  = MATURITY_ALPHA;                 // Development stage.
 $plugin->release   = '0.1.0';                        // Human-readable version.

@@ -43,31 +43,11 @@
     </div>
   {{/allcomplete}}
 
-  <hr>
-
-  <div class="portfolio-integrity my-3">
-    <h4>{{#str}}integritylabel, assignsubmission_portfolio{{/str}}</h4>
-
-    <label class="d-flex gap-2 align-items-start">
-      <input
-        type="checkbox"
-        name="integrity_check"
-        id="portfolio-integrity-check"
-        {{^integritycheckenabled}}disabled{{/integritycheckenabled}}>
-      <span>{{#str}}integritycheck, assignsubmission_portfolio{{/str}}</span>
-    </label>
-  </div>
-
-  <div class="portfolio-actions mt-3">
-    <button
-      type="submit"
-      name="portfolio_submit"
-      value="1"
-      class="btn btn-primary"
-      {{^submitenabled}}disabled{{/submitenabled}}>
-      {{#issubmit}}{{#str}}submitportfolio, assignsubmission_portfolio{{/str}}{{/issubmit}}
-      {{#isresubmit}}{{#str}}resubmitportfolio, assignsubmission_portfolio{{/str}}{{/isresubmit}}
-    </button>
-  </div>
+  {{#allcomplete}}
+    <div class="alert alert-success">
+      {{#str}}integritylabel, assignsubmission_portfolio{{/str}}:
+      {{#str}}integritycheck, assignsubmission_portfolio{{/str}}
+    </div>
+  {{/allcomplete}}
 
 </div>
